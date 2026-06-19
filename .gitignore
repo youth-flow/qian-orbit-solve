@@ -1,4 +1,4 @@
-﻿# Local secrets
+# Local secrets
 JPL_API.env
 **/JPL_API.env
 
@@ -12,29 +12,24 @@ __pycache__/
 *.pyo
 .pytest_cache/
 
-# Generated outputs and heavy reproducible artifacts
-FinalProject/data/generated/
+# Generated outputs and reproducible artifacts
+build/
 data/generated/
-FinalProject/report.pdf
-FinalProject/*.aux
-FinalProject/*.bbl
-FinalProject/*.blg
-FinalProject/*.fdb_latexmk
-FinalProject/*.fls
-FinalProject/*.log
-FinalProject/*.out
-FinalProject/*.toc
-FinalProject/*.xdv
+report.pdf
 *.aux
 *.bbl
+*.bcf
 *.blg
 *.fdb_latexmk
 *.fls
+*.lof
 *.log
+*.lot
 *.out
+*.run.xml
+*.synctex.gz
 *.toc
 *.xdv
-*.synctex.gz
 
 # OS/editor files
 .DS_Store

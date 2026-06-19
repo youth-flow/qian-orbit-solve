@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this project, please cite it as below."
+title: "qian-orbit-solve"
+authors:
+  - family-names: "Young"
+    given-names: "Flow"
+date-released: 2026-06-19
+repository-code: "https://github.com/youth-flow/qian-orbit-solve"
+license: "MIT"
+keywords:
+  - astrodynamics
+  - patched conics
+  - lunar gravity assist
+  - JPL Horizons

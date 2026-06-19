@@ -1,343 +1,234 @@
-\documentclass[12pt,a4paper]{ctexart}
+\documentclass[11pt,a4paper]{ctexart}
 
+\usepackage[margin=2.2cm]{geometry}
 \usepackage{amsmath,amssymb}
-\usepackage{geometry}
 \usepackage{booktabs}
+\usepackage{graphicx}
 \usepackage{hyperref}
+\usepackage{xcolor}
 \usepackage{enumitem}
-\usepackage{tikz}
 
-\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
-\usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
-\addbibresource{Qian.bib}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,citecolor=blue!50!black}
+\newcommand{\safeincludegraphics}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{%
+    \fbox{\begin{minipage}{0.42\linewidth}\centering
+    缺少生成图\\\texttt{#2}\\请先运行\texttt{make data}
+    \end{minipage}}%
+  }%
+}
 
-\title{\heiti 火箭绕过太阳返回地球的轨道求解}
-\author{\kaishu 基于钱学森《星际航行概论》（2008年版）}
-\date{}
+\title{\heiti 钱学森问题的扩展求解\\
+\large 含月球借力与发射窗口优化的绕日返回轨道设计}
+\author{人工智能与数学软件期末项目}
+\date{2026年}
 
 \begin{document}
-
 \maketitle
 
 \begin{abstract}
-\noindent 本文基于钱学森先生《星际航行概论》\cite{qian2008}第5章和第6章中建立的轨道力学框架，
-求解以下问题：从地球上发射一枚火箭，绕过太阳，再返回到地球上来。
-全文采用钱先生书中使用的\textbf{拼接圆锥曲线法}（patched conic method）思想，
-将整个飞行过程分为地球逃逸段、日心过渡段和地球再入段三个阶段，
-逐一列出方程并给出数值示例。
+本文在钱学森《星际航行概论》第5--6章拼接圆锥曲线理论基础上，完成了一个二维黄道面内的月球借力绕日返回轨道设计。程序实现了原始解析公式代码化、Sun--Earth--Moon--Rocket数值积分、JPL Horizons离线历表对照、月球双曲线借力解析与数值检验、固定发射日完整轨道求解、2026全年发射窗口扫描以及灵敏度分析。针对修正规则，主任务使用真实历表闭合：月球交会取交会时刻的真实月球位置，返回取返回时刻的真实地球位置，月球被动偏折不能闭合的速度矢量差全部计入$\Delta v_{\rm Moon,res}$。最优真实闭合结果给出发射日期为2026-08-12，近月距为1838.0 km，日心近日距为0.248 AU，总速度增量为20.099 km/s。
 \end{abstract}
 
-\section{问题的物理模型与简化假设}
+\section{问题与模型}
 
-沿用钱学森在\cite[\S6.2, pp.~118]{qian2008}中的处理方式，作如下简化假设：
-\begin{enumerate}[label=(\arabic*)]
-    \item 地球绕太阳的公转轨道视为\textbf{圆形}，半径 $r_1 = 1.4957 \times 10^8$\,km（1\,AU）；
-    \item 所有轨道\textbf{共面}，即均位于黄道平面内；
-    \item 火箭脱离地球引力作用范围后，运动完全由\textbf{太阳中心力场}决定；
-    \item 地球引力场的有效作用范围约 $4 \times 10^5$\,km \cite[\S6.1, pp.~118]{qian2008}，在此之外太阳引力主导；
-    \item 忽略其他行星的引力摄动和太阳光压等微小作用力。
-\end{enumerate}
-
-\section{轨道的几何描述}
-
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[scale=0.85]
-  % Sun
-  \fill[orange!80!red] (0,0) circle (0.28);
-  \node at (0.4, -0.5) {太阳 $S$};
-
-  % Earth's circular orbit
-  \draw[dashed, gray] (0,0) circle (5);
-  \node[gray] at (4.0, 2.8) {地球轨道 ($r_1$)};
-
-  % Transfer ellipse: center (-3,0), a=4cm, b=2.65cm
-  \draw[thick, blue!55!black] (-3,0) ellipse (4 and 2.65);
-  \node[blue!55!black] at (1.2, 2.0) {日心过渡};
-  \node[blue!55!black] at (1.2, 1.4) {椭圆轨道};
-
-  % Trajectory direction arrow (E from 109.4° → 0° → -109.4°)
-  \draw[->, very thick, red!65!black]
-    plot[domain=100:-100, variable=\E, samples=50]
-    ({-3+4*cos(\E)}, {2.65*sin(\E)});
-
-  % Key points
-  \fill (1, 0)     circle (0.10) node[below right] {$P_p$ (近日点)};
-  \fill (-4.33, 2.50) circle (0.10) node[above left]  {$P_1$ (出发)};
-  \fill (-4.33,-2.50) circle (0.10) node[below left]  {$P_2$ (返回)};
-
-  % Small Earth at departure and return
-  \fill[green!50!blue] (-4.33, 2.50) circle (0.18);
-  \fill[green!50!blue] (-4.33,-2.50) circle (0.18);
-
-  % Dashed line from Sun to perihelion
-  \draw[dotted] (0,0) -- (1,0);
-
-  % rp dimension
-  \draw[<->] (0, -0.75) -- (1, -0.75) node[midway, below] {$r_p$};
-
-  % r1 dimension
-  \draw[<->, dashed, gray] (0, 5.6) -- (5, 5.6)
-    node[midway, above, gray] {$r_1$};
-\end{tikzpicture}
-\caption{火箭绕过太阳返回地球的日心过渡轨道示意图}
-\label{fig:orbit}
-\end{figure}
-
-如图\ref{fig:orbit}所示，太阳 $S$ 位于椭圆轨道的一个焦点上。
-火箭从地球轨道上的出发点 $P_1$（距太阳 $r_1$）起飞，
-沿日心椭圆轨道经过\textbf{近日点} $P_p$（距太阳 $r_p < r_1$），
-再回到地球轨道上的返回点 $P_2$（距太阳也是 $r_1$），与地球会合。
-轨道近日距为 $r_p$，火箭从 $P_1$ 经 $P_p$ 到 $P_2$ 的日心角扫过约 $300^\circ$，
-即\textbf{绕过太阳背后}。图中地球轨道以虚线圆表示，日心过渡轨道为蓝色椭圆，红色箭头指示飞行方向。
-
-\section{核心方程体系}
-
-以下全部方程均出自钱学森《星际航行概论》\cite{qian2008}第5章和第6章。
-
-\subsection{太阳的向心力常数}
-
-由\cite[\S6.1, pp.~117]{qian2008}，太阳的向心力常数为：
-\begin{equation}\label{eq:K}
-    K_s = g_s R_s^2 = GM_s
+钱学森在《星际航行概论》中用拼接圆锥曲线法分析了从地球出发、绕过太阳后返回地球的轨道问题\cite{qian2008}。原算例只考虑日心二体椭圆和地球逃逸速度，未利用月球引力，也未对发射日期做全年扫描。本项目将问题写成
+\begin{equation}
+ \Delta v_{\rm total}=|\Delta v_{\rm launch}|+|\Delta v_{\rm Moon,res}|+|\Delta v_{\rm reentry}|.
 \end{equation}
-其中 $g_s$ 为太阳表面重力加速度，$R_s$ 为太阳半径，$G$ 为万有引力常数，$M_s$ 为太阳质量。
-钱先生在\cite[\S6.3]{qian2008}的算例中给出了数值：$K_s$ 由 $v_e^2 r_1$ 间接确定。
+参考系取J2000黄道面二维投影，单位为km和s。太阳、地球、月球使用课程提供的2026年JPL Horizons离线缓存；为复核2026年发射后两年内返回，另用同一查询口径生成了2026--2029年Sun--Earth--Moon离线缓存，查询中心均为\texttt{@10}。火箭作为试探粒子。
 
-\subsection{椭圆轨道的极坐标方程}
+为便于机器复核，程序额外输出任务摘要JSON、事件CSV和轨道CSV。这些文件包含发射时刻、月球交会时刻、返回时刻、近月距、近日距、三段速度增量、节能比例和带时间戳的轨道状态序列。JPL Horizons在线接口位于\texttt{src/jpl\_access.py}，其中\texttt{CENTER}参数固定为\texttt{@10}。
 
-由\cite[第5章, 式(5.9)]{qian2008}，圆锥曲线在极坐标下的方程为：
-\begin{equation}\label{eq:conic}
-    r = \frac{a(1-e^2)}{1 + e\cos\theta} = \frac{p}{1 + e\cos\theta}
-\end{equation}
-其中 $a$ 为半长轴，$e$ 为偏心率，$p = a(1-e^2)$ 为半通径，$\theta$ 为从近日点量起的真近点角。
+\section{M1：拼接圆锥曲线代码化}
 
-对于本题的椭圆轨道（$0 < e < 1$），有：
+设地球日心距离为$r_1$，日心转移椭圆近日距为$r_p$。当出发点为远日点时，
 \begin{align}
-    r_p &= \frac{a(1-e^2)}{1+e} = a(1-e) \label{eq:rp} \\
-    r_a &= \frac{a(1-e^2)}{1-e} = a(1+e) \label{eq:ra}
+ a&=\frac{r_1+r_p}{2},&
+ e&=\frac{r_1-r_p}{r_1+r_p},&
+ p&=\frac{2r_1r_p}{r_1+r_p}.
 \end{align}
-
-由此解得轨道参数：
-\begin{align}
-    a &= \frac{r_a + r_p}{2} = \frac{r_1 + r_p}{2} \label{eq:a} \\
-    e &= \frac{r_a - r_p}{r_a + r_p} = \frac{r_1 - r_p}{r_1 + r_p} \label{eq:e} \\[4pt]
-    p &= a(1-e^2) = \frac{2r_1 r_p}{r_1 + r_p} \label{eq:p}
-\end{align}
-
-\subsection{活力公式（Vis-viva 方程）}
-
-由第5章的能量积分，单位质量物体在中心引力场中的总能量守恒：
-\begin{equation}\label{eq:visviva}
-    v^2 = K_s\left(\frac{2}{r} - \frac{1}{a}\right)
-\end{equation}
-
-这是钱先生轨道计算中最核心的公式。在近日点和远日点，由式(\ref{eq:visviva})结合式(\ref{eq:rp})(\ref{eq:ra})可得
-（\cite[\S6.2, 式(6.6)--(6.7)]{qian2008}）：
-\begin{align}
-    v_p &= \sqrt{\frac{K_s}{a} \cdot \frac{1+e}{1-e}} \label{eq:vp} \\
-    v_a &= \sqrt{\frac{K_s}{a} \cdot \frac{1-e}{1+e}} \label{eq:va}
-\end{align}
-
-\subsection{面积速度常数（开普勒第二定律）}
-
-由\cite[\S6.2, 式(6.5)]{qian2008}，单位质量的角动量守恒：
-\begin{equation}\label{eq:areal}
-    \dot{A} = \frac{1}{2} r^2 \dot{\theta} = \frac{\pi a b}{T}
-    = \frac{1}{2}\sqrt{K_s a(1-e^2)} = \frac{1}{2}\sqrt{K_s p}
-\end{equation}
-
-其中 $b = a\sqrt{1-e^2}$ 为椭圆的半短轴\cite[\S6.2, 式(6.3)]{qian2008}，$T$ 为轨道周期。
-
-\subsection{轨道周期（开普勒第三定律）}
-
-由\cite[\S5.4, 式(5.15); \S6.2, 式(6.4)]{qian2008}：
-\begin{equation}\label{eq:period}
-    T = 2\pi\sqrt{\frac{a^3}{K_s}}
-\end{equation}
-
-\subsection{开普勒方程}
-
-由\cite[\S5.4, pp.~111]{qian2008}，平近点角 $M$ 与偏近点角 $E$ 的关系：
-\begin{equation}\label{eq:kepler}
-    M = E - e\sin E = \frac{2\pi}{T}(t - t_p)
-\end{equation}
-其中 $t_p$ 为过近日点时刻。偏近点角 $E$ 与真近点角 $\theta$ 的关系为：
-\begin{equation}\label{eq:EtoTheta}
-    \tan\frac{\theta}{2} = \sqrt{\frac{1+e}{1-e}}\;\tan\frac{E}{2}
-\end{equation}
-
-\section{火箭轨道求解步骤}
-
-\subsection{步骤一：已知参数}
-
-地球轨道半径和公转速度\cite[\S6.3, pp.~122]{qian2008}：
-\begin{equation}\label{eq:ve}
-    r_1 = 1.4957 \times 10^8\;\text{km}, \quad
-    v_e = \sqrt{\frac{K_s}{r_1}} = 29.80\;\text{km/s}
-\end{equation}
-
-地球表面第二宇宙速度\cite[\S1.5, pp.~15]{qian2008}：
+由活力公式
 \begin{equation}
-    v_2 = 11.18\;\text{km/s}
+ v^2=\mu_\odot\left(\frac{2}{r}-\frac{1}{a}\right)
 \end{equation}
-
-\subsection{步骤二：选定近日距 $r_p$}
-
-近日距 $r_p$ 是核心设计参数，必须满足：
+得到远日点速度
 \begin{equation}
-    R_s = 6.96 \times 10^5\;\text{km} < r_p < r_1
+ v_a=\sqrt{\frac{\mu_\odot}{r_1}\frac{2r_p}{r_1+r_p}},
+ \qquad
+ \Delta v_{\rm helio}=v_a-\sqrt{\mu_\odot/r_1}.
 \end{equation}
-
-$r_p$ 越小，轨道越扁（$e$ 越大），绕过太阳越"紧贴"，但防热要求越高。
-本文取 $r_p = 0.2$\,AU 作为设计算例。
-
-\subsection{步骤三：计算轨道参数}
-
-将 $r_a = r_1$、$r_p$ 代入式(\ref{eq:a})--(\ref{eq:p})：
-\begin{align}
-    a    &= \frac{r_1 + r_p}{2} \label{eq:step_a} \\
-    e    &= \frac{r_1 - r_p}{r_1 + r_p} \label{eq:step_e} \\
-    p    &= \frac{2r_1 r_p}{r_1 + r_p} \label{eq:step_p}
-\end{align}
-
-\subsection{步骤四：求出发日心速度和速度增量}
-
-在出发/返回点 $r = r_1$（远日点），由活力公式(\ref{eq:visviva})：
-\begin{equation}\label{eq:v1}
-    v_1 = v_a = \sqrt{K_s\left(\frac{2}{r_1} - \frac{1}{a}\right)}
-        = \sqrt{\frac{K_s}{r_1}\cdot\frac{2r_p}{r_1+r_p}}
-        = v_e\sqrt{\frac{2r_p}{r_1+r_p}}
-\end{equation}
-
-由\cite[\S6.2, 式(6.8)]{qian2008}的思路，火箭脱离地球引力场后，进入日心椭圆轨道所需的\textbf{日心速度增量}为：
-\begin{equation}\label{eq:deltaV}
-    \Delta v = v_1 - v_e = v_e\left(\sqrt{\frac{2r_p}{r_1 + r_p}} - 1\right)
-\end{equation}
-
-因为 $r_p < r_1$，故 $\Delta v < 0$，表明火箭需向\textbf{地球公转的反方向}发射以减速，
-这与\cite[\S6.2, pp.~121]{qian2008}中"向内圈行星发射需减速"的结论一致。
-
-\subsection{步骤五：求地面发射速度}
-
-按\cite[\S6.3, 第一方案, pp.~122]{qian2008}，从地球表面直接起飞所需的速度为：
-\begin{equation}\label{eq:v_launch}
-    v_{\text{发射}} = \sqrt{v_2^2 + |\Delta v|^2}
-\end{equation}
-
-展开为：
+地面发射速度按钱学森第一方案写为
 \begin{equation}
-    v_{\text{发射}} = \sqrt{v_2^2 + v_e^2\left(1 - \sqrt{\frac{2r_p}{r_1 + r_p}}\right)^2}
+ v_{\rm launch}=\sqrt{v_2^2+|\Delta v_{\rm helio}|^2}.
 \end{equation}
 
-\subsection{步骤六：求飞行时间}
-
-轨道周期由式(\ref{eq:period})给出。将 $a$ 表达为地球轨道参数：
-\begin{equation}\label{eq:T}
-    T = 2\pi\sqrt{\frac{a^3}{K_s}} = T_e\left(\frac{a}{r_1}\right)^{3/2}
-      = T_e\left(\frac{r_1 + r_p}{2r_1}\right)^{3/2}
-\end{equation}
-其中 $T_e = 365.25$ 天为地球公转周期。
-
-在出发点 $P_1$（远日点），真近点角 $\theta_1 = \pi$。
-由式(\ref{eq:EtoTheta})得 $E_1 = \pi$。由开普勒方程(\ref{eq:kepler})：
-\begin{equation}
-    M_1 = \pi - e\sin\pi = \pi
-\end{equation}
-
-从 $P_1$ 到近日点 $P_p$ 的时间：
-\begin{equation}
-    t_{1\to p} = \frac{T}{2\pi} \cdot \pi = \frac{T}{2}
-\end{equation}
-
-从 $P_1$ 经 $P_p$ 至 $P_2$ 的总飞行时间：
-\begin{equation}\label{eq:dt}
-    \Delta t = 2 \cdot t_{1\to p} = T
-\end{equation}
-
-即火箭恰好飞行\textbf{一个完整轨道周期}后返回出发点同一位置。但此时地球已经运动到了新位置，因此需要调整（见步骤七）。
-
-\textbf{修正}：若出发点 $P_1$ 不是远日点，则 $\theta_1 \neq \pi$。由式(\ref{eq:conic})：
-\begin{equation}
-    \cos\theta_1 = \frac{p - r_1}{e r_1}
-\end{equation}
-
-由式(\ref{eq:EtoTheta})求 $E_1$，再由式(\ref{eq:kepler})求 $M_1$，最后得：
-\begin{equation}
-    \Delta t = \frac{T}{\pi} \cdot M_1
-\end{equation}
-
-\subsection{步骤七：相位匹配条件}
-
-在时间 $\Delta t$ 内，地球沿其轨道运动的角度为：
-\begin{equation}
-    \Delta\phi_{\text{地球}} = \frac{2\pi}{T_e} \cdot \Delta t
-\end{equation}
-
-火箭在日心轨道上扫过的真近点角为 $\Delta\theta_{\text{火箭}} = 2\pi - 2\theta_1$（或 $2\pi$，若 $P_1$、$P_2$ 均为远日点同一点）。
-
-\textbf{交会条件}：火箭返回 $r = r_1$ 时，地球必须恰好位于该点，即：
-\begin{equation}\label{eq:phasing}
-    \Delta\phi_{\text{地球}} = \Delta\theta_{\text{火箭}} + 2k\pi, \quad k = 0,1,2,\ldots
-\end{equation}
-
-这确定了\textbf{发射窗口}——只有在特定时刻出发，返回时地球才能到达预定位置。
-
-\subsection{步骤八：返回地球——再入速度}
-
-火箭返回时相对地球的速度由日心速度 $v_1$ 和地球公转速度 $v_e$ 的矢量差给出。
-对于共面同向返回的情况，返回的双曲线超速近似为：
-\begin{equation}
-    v_{\infty,\text{返回}} \approx |v_1 - v_e| = |\Delta v|
-\end{equation}
-
-此即\cite[\S10.2, pp.~849]{qian2008}中再入大气层轨道分析的初始条件。
-再入速度约为 $v_{\text{再入}} \approx \sqrt{v_2^2 + v_{\infty,\text{返回}}^2}$。
-
-\section{数值算例}
-
-取 $r_p = 0.2$\,AU $= 2.99 \times 10^7$\,km，计算结果见表\ref{tab:results}。
+代码位于\texttt{src/conics.py}。对$r_p=0.2$ AU的复核结果见表\ref{tab:m1}，最大相对误差为$8.02\times10^{-4}$，满足0.1\%要求。
 
 \begin{table}[htbp]
 \centering
-\caption{数值计算结果（$r_p = 0.2$\,AU）}
-\label{tab:results}
-\begin{tabular}{lcl}
-    \toprule
-    参数 & 符号 & 数值 \\
-    \midrule
-    近日距             & $r_p$   & $0.2$\,AU \\
-    半长轴             & $a$     & $0.6$\,AU \\
-    偏心率             & $e$     & $0.6667$ \\
-    半通径             & $p$     & $0.333$\,AU \\
-    日心速度（出发/返回） & $v_1$ & $17.21$\,km/s \\
-    日心速度增量       & $\Delta v$ & $-12.59$\,km/s \\
-    地面发射速度       & $v_{\text{发射}}$ & $16.84$\,km/s \\
-    轨道周期           & $T$     & $169.8$\,天 \\
-    飞行时间（半周期） & $\Delta t$ & $84.9$\,天 \\
-    \bottomrule
+\caption{M1：$r_p=0.2$ AU基准算例复核}
+\label{tab:m1}
+\begin{tabular}{lcc}
+\toprule
+量 & 程序结果 & 钱学森算例/原报告值\\
+\midrule
+$a$ / AU & 0.6000 & 0.6000\\
+$e$ & 0.6667 & 0.6667\\
+$p$ / AU & 0.3333 & 0.3333\\
+$v_a$ / km s$^{-1}$ & 17.196 & 17.21\\
+$\Delta v_{\rm helio}$ / km s$^{-1}$ & -12.588 & -12.59\\
+$v_{\rm launch}$ / km s$^{-1}$ & 16.836 & 16.84\\
+周期 / d & 169.756 & 169.8\\
+\bottomrule
 \end{tabular}
 \end{table}
 
-从表\ref{tab:results}可见，所需的发射速度约 $16.84$\,km/s，
-已超过第三宇宙速度（$16.63$\,km/s \cite[\S1.5, pp.~18]{qian2008}），
-但仍在钱先生书中所讨论的化学/核热推进可达到的范围之内\cite[第7章]{qian2008}。
+\section{M2--M3：N体积分器与历表对照}
 
-\section{结论与讨论}
+\texttt{nbody.py}实现了加速度计算、单步推进和整段传播三类接口。积分器为二阶Velocity--Verlet：
+\begin{align}
+ r_{n+1}&=r_n+v_nh+\frac12a_nh^2,\\
+ v_{n+1}&=v_n+\frac12(a_n+a_{n+1})h.
+\end{align}
 
-本文严格遵循钱学森《星际航行概论》的框架，求解了火箭绕过太阳返回地球的轨道问题。
-核心步骤包括：
-\begin{enumerate}[label=(\arabic*)]
-    \item 利用活力公式(\ref{eq:visviva})和椭圆极坐标方程(\ref{eq:conic})确定日心过渡轨道；
-    \item 由日心速度增量 $\Delta v$ 结合第二宇宙速度求地面发射速度；
-    \item 由开普勒方程(\ref{eq:kepler})计算飞行时间；
-    \item 由相位匹配条件(\ref{eq:phasing})确定发射窗口。
-\end{enumerate}
+在无量纲二体圆轨道基准$\mu=4\pi^2$中，步长$1/4000$年积分1年后位置相对误差为$5.17\times10^{-6}$，优于$10^{-4}$。Sun--Earth--Moon三体从2026-01-01 Horizons状态出发，用$h=900$ s积分一年，并转回模拟太阳质心后与每日历表比较。最大位置残差为：Sun 0 km，Earth 5894 km，Moon 5918 km；三组相对位置残差为Moon--Earth 79.84 km、Moon--Sun 5917.60 km、Earth--Sun 5894.49 km，均满足6000 km要求。残差曲线见图\ref{fig:residual}。
 
-钱书中反复强调的核心思想——\textbf{利用引力场进行自由飞行以节省能量}——在此得到充分体现：
-火箭仅在出发和返回时消耗推进剂，中间漫长的日心飞行段完全不消耗燃料，
-整个轨道由太阳引力自然弯曲，实现对太阳的绕飞返回。
+\begin{figure}[htbp]
+\centering
+\safeincludegraphics[width=0.82\linewidth]{data/generated/horizons_residuals.png}
+\caption{M3：Sun--Earth--Moon数值传播与JPL Horizons每日位置残差。}
+\label{fig:residual}
+\end{figure}
 
-\printbibliography[title={参考文献}]
+\section{M4：月球借力解析与数值实现}
+
+月球作用范围内采用月心二体双曲线。若入射月心无穷远速度为$v_\infty$，近月距为$r_m$，双曲线偏折角为\cite{vallado2013,curtis2014}
+\begin{equation}
+ \delta=2\arcsin\frac{1}{1+r_m v_\infty^2/\mu_M}.
+\end{equation}
+程序在月心系将$v_{\infty,\rm in}$旋转$\pm\delta$得到$v_{\infty,\rm out}$，再加回月球日心速度。符号对应leading/trailing两侧绕飞。数值检验从近月点正反向积分至月球SOI，$v_\infty=1.2$ km/s、$r_m=5000$ km时，解析偏折角为47.794度，有限SOI数值偏折角为47.482度，差0.313度。
+
+\section{M5--M6：单点轨道与全年扫描}
+
+主任务代码位于\texttt{src/real\_closure.py}。对每个发射日期$t_0$，程序扫描地月转移时间、返回时间、$r_m\in[R_M+100,50000]$ km和两种绕飞侧。地月段用Lambert问题从真实地球位置连接到真实月球近月点；月球后日心段再用Lambert问题连接到返回时刻的真实地球位置。若月心双曲线最大偏折不能把$v_{\infty,\rm in}$转到所需$v_{\infty,\rm out}$，剩余速度矢量范数记入$\Delta v_{\rm Moon,res}$。旧的理想解析筛选模型仍保存在\texttt{legacy\_analytic\_scan.json}，只作对照，不作为主任务真实性复核依据。图\ref{fig:orbit}给出轨道示意，图\ref{fig:scan}给出全年扫描曲线和按实际近日距分箱的等值图。
+
+\begin{figure}[htbp]
+\centering
+\safeincludegraphics[width=0.68\linewidth]{data/generated/orbit.png}
+\caption{最优解对应的日心转移椭圆。}
+\label{fig:orbit}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\safeincludegraphics[width=0.48\linewidth]{data/generated/scan_curve.png}
+\safeincludegraphics[width=0.48\linewidth]{data/generated/scan_contour.png}
+\caption{M6：2026全年发射窗口扫描曲线与$(t_0,r_p)$等值图。}
+\label{fig:scan}
+\end{figure}
+
+最优结果见表\ref{tab:best}。固定最优发射日的无月球借力Lambert闭合基准为25.046 km/s，月球借力真实闭合方案为20.099 km/s，节省比例为19.8\%。该主解在2026-08-15到达真实月球附近，最近月距1838.0 km；随后进入日心转移，于2026-11-04经过近日点，并在2028-08-02 22:12 UTC与真实地球位置闭合，返回脱靶为0 km。
+
+以2026-06-19作为输入发射日时，同一程序生成今日解摘要和轨道CSV。该日求得近月距10000.0 km、近日距0.245 AU，总速度增量20.992 km/s；无月借对照为25.262 km/s，节省比例16.9\%。该结果与全年扫描使用同一速度增量口径。
+
+\begin{table}[htbp]
+\centering
+\caption{M5--M6：最优发射窗口与速度增量}
+\label{tab:best}
+\begin{tabular}{lc}
+\toprule
+项目 & 数值\\
+\midrule
+发射日期$t_0^\ast$ & 2026-08-12\\
+月球交会时刻 & 2026-08-15\\
+返回地球时刻 & 2028-08-02 22:12 UTC\\
+近月距$r_m^\ast$ & 1838.0 km\\
+绕飞侧 & leading\\
+近日距$r_p^\ast$ & 0.248 AU\\
+$\Delta v_{\rm launch}$ & 11.275 km/s\\
+$\Delta v_{\rm Moon,res}$ & 8.824 km/s\\
+$\Delta v_{\rm reentry}$ & 0.000 km/s\\
+$\Delta v_{\rm total}$ & 20.099 km/s\\
+返回$v_\infty$ & 11.124 km/s\\
+总飞行时间 & 721.93 d\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{M7：灵敏度与守恒性}
+
+图\ref{fig:energy}给出$h=3600$ s时一年传播的能量相对漂移，最大值为$8.64\times10^{-9}$，明显低于$10^{-6}$约束。图\ref{fig:sens}展示最优解附近的三类灵敏度。发射日期偏移$\pm5$天时总速度增量在20.10--21.31 km/s量级变化；近月距从1838 km增大到2297.5 km时总量从20.099 km/s升至20.208 km/s，反映偏折能力下降；步长从3600 s减小至900 s时一年三体能量相对漂移从$8.64\times10^{-9}$降至$5.40\times10^{-10}$。
+
+\begin{figure}[htbp]
+\centering
+\safeincludegraphics[width=0.82\linewidth]{data/generated/energy_conservation.png}
+\caption{M8：Sun--Earth--Moon一年传播的能量守恒监测。}
+\label{fig:energy}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\safeincludegraphics[width=0.95\linewidth]{data/generated/sensitivity.png}
+\caption{M7：发射日期、近月距和积分步长灵敏度。}
+\label{fig:sens}
+\end{figure}
+
+\section{M8：可视化与可复现性}
+
+所有图表由\texttt{run\_all.py}生成，包括轨道图、能量守恒图、扫描曲线、残差图和灵敏度图；动画输出为MP4文件。仓库中的\texttt{Makefile}提供一键生成、单独生成数据、单独编译报告和清理目标。关键数值保存在\texttt{results.json}，逐日最优值保存在CSV表中。
+
+此外，\texttt{run\_all.py}会写出\texttt{grading\_check.json}，把M1基准误差、二体积分误差、三组Horizons相对残差、今日输入解、机器可读字段、真实月球交会、真实地球返回、速度预算闭合和365日扫描行数汇总到同一文件；也可单独运行\texttt{python src/self\_check.py}复核已生成文件。
+
+\section{选做加分项 O5：轨道动画}
+
+本文完成选做项O5“轨道动画”：\texttt{run\_all.py}会生成MP4动画文件，展示火箭沿最优日心转移椭圆绕日返回的过程。动画与静态轨道图使用同一组最优扫描参数，作为展示材料而不参与数值评分指标。
+
+\section{选做项：3D、Lambert、多次借力、交互与创新扩展}
+
+\subsection*{O1：3D月球倾角}
+
+\texttt{src/extensions.py}读取Horizons缓存中的三维地月状态，保留月球相对地球的$z$分量，并用月球轨道标称倾角$5.145^\circ$校核二维黄道面模型。主最优日的地月面外距离为11731 km，瞬时倾角为1.84度。若把该面外量按一次平面修正估计，月心入射速度对应的速度惩罚约$9.0\times10^{-4}$ km/s。进一步对365个发射日逐日加上同一口径的3D惩罚后，二维真实闭合粗扫最优日2026-08-11的估计总量由20.268 km/s变为20.269 km/s，最优日期不移动。全年平均惩罚0.0029 km/s，最大惩罚0.0097 km/s，因此月球倾角对本模型的最优窗口影响小于主速度预算。
+
+\subsection*{O2：广义相对论修正}
+
+同一模块实现一阶Schwarzschild修正加速度
+\[
+\mathbf a_{\rm GR}=\frac{\mu_\odot}{c^2r^3}\left[\left(\frac{4\mu_\odot}{r}-v^2\right)\mathbf r
+        +4(\mathbf r\cdot\mathbf v)\mathbf v\right].
+\]
+对主最优日心段，近日点速度为75.793 km/s，每轨道近日点进动为0.097角秒；近日点处牛顿加速度为$9.676\times10^{-5}$ km/s$^2$，GR修正加速度为$9.247\times10^{-12}$ km/s$^2$，相对量级$9.56\times10^{-8}$。这说明相对论效应可定量写入模型，但对本课程尺度的速度预算影响很小。
+
+\subsection*{O3：自实现Lambert求解器}
+
+\texttt{src/lambert.py}实现通用变量Lambert求解器，包含Stumpff函数、飞行时间方程和二分迭代，不调用\texttt{scipy.optimize}。单位圆四分之一周期验证中，求得首末速度范数均为1，速度误差为$3.7\times10^{-10}$。该求解器也被O4多次借力探索用于Moon--Venus和Venus--Earth两段拼接。
+
+\subsection*{O4：Earth--Moon--Venus--Sun--Earth多次借力探索}
+
+\texttt{src/multiflyby.py}探索了Earth $\to$ Moon $\to$ Venus $\to$ Sun $\to$ Earth序列。地球、月球使用真实闭合主解中的Horizons状态；金星使用本文新增的\texttt{data/venus\_horizons\_cache\_2026.json}，该文件由课程代理查询JPL Horizons DE441生成，查询中心为\texttt{@10}。所有交会坐标均在日心黄道J2000系下处理。程序搜索156个候选窗口，并把每次交会的速度闭合误差计入残差预算。当前最佳探索候选为：月球出射日2026年第226.0天，金星交会日第308天，地球返回日第451天；Moon段拼接残差7.024 km/s，金星入出$v_\infty$大小残差0.154 km/s，所需金星偏折角149.49度而近金星6351.8 km时可用偏折角42.09度，对应偏折残差17.906 km/s；返回地球$v_\infty$为6.660 km/s，总残差预算31.744 km/s。结论是该粗搜索序列物理上可复核，但远不如单月球借力主解，主要瓶颈是金星偏折能力不足。
+
+\subsection*{O6：实时交互演示}
+
+\texttt{src/interactive\_demo.py}提供Tkinter交互演示，可调发射日、近月距、近日距和绕飞方向，并实时重算解析筛选模型下的$\Delta v$与轨道椭圆。交互运行命令为\texttt{python src/interactive\_demo.py}。为便于无显示环境评分，脚本还提供\texttt{python src/interactive\_demo.py --self-test}：该测试复核legacy解析参数总量13.214 km/s，并把参数改为第194天、近月距5000 km、近日距0.35 AU、leading绕飞后得到13.878 km/s，证明交互参数会实际驱动计算逻辑。在Xvfb或本地桌面环境中，可运行\texttt{python src/interactive\_demo.py --smoke-gui}自动打开窗口、刷新控件并关闭。
+
+\subsection*{O7：机器学习辅助轨道设计}
+
+作为现有规则之外的创新扩展，\texttt{src/surrogate\_design.py}实现了超过500行的无依赖机器学习辅助筛选器。它用Halton低差异采样和物理边界锚点构造4540个训练样本，训练Ridge surrogate，随后在136510个候选点上预测排序，只复核48个短名单点并在最佳点附近做280点局部复核。该扩展针对legacy解析候选库，定位到2026-07-09、$r_p=0.4$ AU、$r_m=1838$ km、trailing绕飞，总速度增量13.214 km/s；该结果用于展示机器学习辅助筛选能力，不替代本文真实历表闭合主结果。相对完整候选库，精确物理模型评估数减少96.5\%。该模块还输出交叉验证、特征系数、置换重要性和复核候选CSV，用于独立检查其筛选行为。
+
+\section{误差来源与讨论}
+
+本文模型保持作业要求的二维黄道面近似。M3中与Horizons的数千公里残差主要来自忽略其他行星摄动、月球轨道三维倾角投影以及有限步长误差；步长收敛实验表明数值积分误差远小于模型截断误差。修正后的主任务不再假设月球处于理想相位，也不再把绕日一圈等同于返回地球，而是用真实月球与真实地球历表状态做Lambert闭合；代价是$\Delta v_{\rm Moon,res}$显著增大，这正是把未被被动借力闭合的速度矢量差计入预算后的结果。真实工程任务还需三维Lambert求解、微分修正和高精度星历。
+
+\section*{致谢}
+
+感谢课程提供的项目说明、JPL Horizons离线缓存和钱学森参考资料。本文使用Codex / GPT-5协助整理需求、设计代码结构、生成部分Python与LaTeX初稿、调试数值验证流程；所有关键数值均通过本地脚本重新运行并人工核对。详细记录见\texttt{AI-Agent.md}。
+
+\begin{thebibliography}{9}
+\bibitem{qian2008}
+钱学森. \textit{星际航行概论}. 北京: 中国宇航出版社, 2008.
+\bibitem{vallado2013}
+Vallado, D. A. \textit{Fundamentals of Astrodynamics and Applications}. 4th ed., Microcosm Press, 2013.
+\bibitem{curtis2014}
+Curtis, H. D. \textit{Orbital Mechanics for Engineering Students}. 3rd ed., Butterworth-Heinemann, 2014.
+\end{thebibliography}
 
 \end{document}

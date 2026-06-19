@@ -7,19 +7,21 @@ Sun、Earth、Moon 在太阳质心系（J2000 黄道面）下的三维状态向�
 保存到 horizons_cache_2026.json 供离线使用。
 
 依赖：numpy, astroquery, astropy
-运行：conda run -n Teaching python generate_horizons_cache.py
+运行：python scripts/generate_horizons_cache.py
 """
 
-import sys
 import json
+import os
 from pathlib import Path
+import urllib.parse
+import urllib.request
 
 import numpy as np
-from astroquery.jplhorizons import Horizons
 
-# ---------- 代理补丁（必须在任何 Horizons 调用之前导入） ----------
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "week9" / "src"))
-import jpl_forward  # noqa: F401
+try:
+    from astroquery.jplhorizons import Horizons
+except ImportError:
+    Horizons = None
 
 # ---------- 常数 ----------
 AU_KM   = 149_597_870.7     # 1 AU = ? km
@@ -36,11 +38,74 @@ BODIES = [
     {"id": "301", "name": "Moon"},
 ]
 
-OUT = Path(__file__).resolve().parent / "horizons_cache_2026.json"
+OUT = Path(__file__).resolve().parents[1] / "data" / "horizons_cache_2026.json"
+
+
+def fetch_with_proxy(body_id: str, name: str) -> list[dict]:
+    """Fetch one body through the optional course Horizons proxy."""
+
+    api = os.environ.get("JPL_API")
+    token = os.environ.get("JPL_TOKEN")
+    if not api or not token:
+        raise RuntimeError("Set JPL_API and JPL_TOKEN, or install astroquery for direct Horizons access.")
+    print(f"  正在通过代理获取 {name} (id={body_id}) ...")
+    params = {
+        "format": "json",
+        "COMMAND": body_id,
+        "OBJ_DATA": "NO",
+        "MAKE_EPHEM": "YES",
+        "EPHEM_TYPE": "VECTORS",
+        "CENTER": CENTER,
+        "START_TIME": START,
+        "STOP_TIME": STOP,
+        "STEP_SIZE": STEP,
+        "OUT_UNITS": "KM-S",
+        "REF_PLANE": "ECLIPTIC",
+        "REF_SYSTEM": "J2000",
+        "VEC_TABLE": "2",
+        "CSV_FORMAT": "YES",
+        "token": token,
+    }
+    url = api + "?" + urllib.parse.urlencode(params)
+    with urllib.request.urlopen(url, timeout=60) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if payload.get("error"):
+        raise RuntimeError(payload["error"])
+    text = payload.get("result", "")
+    rows = []
+    in_table = False
+    for line in text.splitlines():
+        line = line.strip()
+        if line == "$$SOE":
+            in_table = True
+            continue
+        if line == "$$EOE":
+            break
+        if not in_table or not line:
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 8:
+            continue
+        rows.append(
+            {
+                "jd_tdb": float(parts[0]),
+                "calendar": parts[1],
+                "x_km": float(parts[2]),
+                "y_km": float(parts[3]),
+                "z_km": float(parts[4]),
+                "vx_km_s": float(parts[5]),
+                "vy_km_s": float(parts[6]),
+                "vz_km_s": float(parts[7]),
+            }
+        )
+    print(f"    获取 {len(rows)} 个历元")
+    return rows
 
 
 def fetch(body_id: str, name: str) -> list[dict]:
     """获取单天体全年状态向量，返回 list[dict]。"""
+    if Horizons is None or os.environ.get("JPL_API"):
+        return fetch_with_proxy(body_id, name)
     print(f"  正在获取 {name} (id={body_id}) ...")
     obj = Horizons(
         id=body_id,
