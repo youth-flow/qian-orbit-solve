@@ -1,0 +1,17 @@
+build/
+__pycache__/
+*.pyc
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.xdv
+report.pdf
+data/generated/

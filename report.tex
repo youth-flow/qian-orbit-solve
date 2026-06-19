@@ -1,0 +1,343 @@
+\documentclass[12pt,a4paper]{ctexart}
+
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{tikz}
+
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+\usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
+\addbibresource{Qian.bib}
+
+\title{\heiti 火箭绕过太阳返回地球的轨道求解}
+\author{\kaishu 基于钱学森《星际航行概论》（2008年版）}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent 本文基于钱学森先生《星际航行概论》\cite{qian2008}第5章和第6章中建立的轨道力学框架，
+求解以下问题：从地球上发射一枚火箭，绕过太阳，再返回到地球上来。
+全文采用钱先生书中使用的\textbf{拼接圆锥曲线法}（patched conic method）思想，
+将整个飞行过程分为地球逃逸段、日心过渡段和地球再入段三个阶段，
+逐一列出方程并给出数值示例。
+\end{abstract}
+
+\section{问题的物理模型与简化假设}
+
+沿用钱学森在\cite[\S6.2, pp.~118]{qian2008}中的处理方式，作如下简化假设：
+\begin{enumerate}[label=(\arabic*)]
+    \item 地球绕太阳的公转轨道视为\textbf{圆形}，半径 $r_1 = 1.4957 \times 10^8$\,km（1\,AU）；
+    \item 所有轨道\textbf{共面}，即均位于黄道平面内；
+    \item 火箭脱离地球引力作用范围后，运动完全由\textbf{太阳中心力场}决定；
+    \item 地球引力场的有效作用范围约 $4 \times 10^5$\,km \cite[\S6.1, pp.~118]{qian2008}，在此之外太阳引力主导；
+    \item 忽略其他行星的引力摄动和太阳光压等微小作用力。
+\end{enumerate}
+
+\section{轨道的几何描述}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[scale=0.85]
+  % Sun
+  \fill[orange!80!red] (0,0) circle (0.28);
+  \node at (0.4, -0.5) {太阳 $S$};
+
+  % Earth's circular orbit
+  \draw[dashed, gray] (0,0) circle (5);
+  \node[gray] at (4.0, 2.8) {地球轨道 ($r_1$)};
+
+  % Transfer ellipse: center (-3,0), a=4cm, b=2.65cm
+  \draw[thick, blue!55!black] (-3,0) ellipse (4 and 2.65);
+  \node[blue!55!black] at (1.2, 2.0) {日心过渡};
+  \node[blue!55!black] at (1.2, 1.4) {椭圆轨道};
+
+  % Trajectory direction arrow (E from 109.4° → 0° → -109.4°)
+  \draw[->, very thick, red!65!black]
+    plot[domain=100:-100, variable=\E, samples=50]
+    ({-3+4*cos(\E)}, {2.65*sin(\E)});
+
+  % Key points
+  \fill (1, 0)     circle (0.10) node[below right] {$P_p$ (近日点)};
+  \fill (-4.33, 2.50) circle (0.10) node[above left]  {$P_1$ (出发)};
+  \fill (-4.33,-2.50) circle (0.10) node[below left]  {$P_2$ (返回)};
+
+  % Small Earth at departure and return
+  \fill[green!50!blue] (-4.33, 2.50) circle (0.18);
+  \fill[green!50!blue] (-4.33,-2.50) circle (0.18);
+
+  % Dashed line from Sun to perihelion
+  \draw[dotted] (0,0) -- (1,0);
+
+  % rp dimension
+  \draw[<->] (0, -0.75) -- (1, -0.75) node[midway, below] {$r_p$};
+
+  % r1 dimension
+  \draw[<->, dashed, gray] (0, 5.6) -- (5, 5.6)
+    node[midway, above, gray] {$r_1$};
+\end{tikzpicture}
+\caption{火箭绕过太阳返回地球的日心过渡轨道示意图}
+\label{fig:orbit}
+\end{figure}
+
+如图\ref{fig:orbit}所示，太阳 $S$ 位于椭圆轨道的一个焦点上。
+火箭从地球轨道上的出发点 $P_1$（距太阳 $r_1$）起飞，
+沿日心椭圆轨道经过\textbf{近日点} $P_p$（距太阳 $r_p < r_1$），
+再回到地球轨道上的返回点 $P_2$（距太阳也是 $r_1$），与地球会合。
+轨道近日距为 $r_p$，火箭从 $P_1$ 经 $P_p$ 到 $P_2$ 的日心角扫过约 $300^\circ$，
+即\textbf{绕过太阳背后}。图中地球轨道以虚线圆表示，日心过渡轨道为蓝色椭圆，红色箭头指示飞行方向。
+
+\section{核心方程体系}
+
+以下全部方程均出自钱学森《星际航行概论》\cite{qian2008}第5章和第6章。
+
+\subsection{太阳的向心力常数}
+
+由\cite[\S6.1, pp.~117]{qian2008}，太阳的向心力常数为：
+\begin{equation}\label{eq:K}
+    K_s = g_s R_s^2 = GM_s
+\end{equation}
+其中 $g_s$ 为太阳表面重力加速度，$R_s$ 为太阳半径，$G$ 为万有引力常数，$M_s$ 为太阳质量。
+钱先生在\cite[\S6.3]{qian2008}的算例中给出了数值：$K_s$ 由 $v_e^2 r_1$ 间接确定。
+
+\subsection{椭圆轨道的极坐标方程}
+
+由\cite[第5章, 式(5.9)]{qian2008}，圆锥曲线在极坐标下的方程为：
+\begin{equation}\label{eq:conic}
+    r = \frac{a(1-e^2)}{1 + e\cos\theta} = \frac{p}{1 + e\cos\theta}
+\end{equation}
+其中 $a$ 为半长轴，$e$ 为偏心率，$p = a(1-e^2)$ 为半通径，$\theta$ 为从近日点量起的真近点角。
+
+对于本题的椭圆轨道（$0 < e < 1$），有：
+\begin{align}
+    r_p &= \frac{a(1-e^2)}{1+e} = a(1-e) \label{eq:rp} \\
+    r_a &= \frac{a(1-e^2)}{1-e} = a(1+e) \label{eq:ra}
+\end{align}
+
+由此解得轨道参数：
+\begin{align}
+    a &= \frac{r_a + r_p}{2} = \frac{r_1 + r_p}{2} \label{eq:a} \\
+    e &= \frac{r_a - r_p}{r_a + r_p} = \frac{r_1 - r_p}{r_1 + r_p} \label{eq:e} \\[4pt]
+    p &= a(1-e^2) = \frac{2r_1 r_p}{r_1 + r_p} \label{eq:p}
+\end{align}
+
+\subsection{活力公式（Vis-viva 方程）}
+
+由第5章的能量积分，单位质量物体在中心引力场中的总能量守恒：
+\begin{equation}\label{eq:visviva}
+    v^2 = K_s\left(\frac{2}{r} - \frac{1}{a}\right)
+\end{equation}
+
+这是钱先生轨道计算中最核心的公式。在近日点和远日点，由式(\ref{eq:visviva})结合式(\ref{eq:rp})(\ref{eq:ra})可得
+（\cite[\S6.2, 式(6.6)--(6.7)]{qian2008}）：
+\begin{align}
+    v_p &= \sqrt{\frac{K_s}{a} \cdot \frac{1+e}{1-e}} \label{eq:vp} \\
+    v_a &= \sqrt{\frac{K_s}{a} \cdot \frac{1-e}{1+e}} \label{eq:va}
+\end{align}
+
+\subsection{面积速度常数（开普勒第二定律）}
+
+由\cite[\S6.2, 式(6.5)]{qian2008}，单位质量的角动量守恒：
+\begin{equation}\label{eq:areal}
+    \dot{A} = \frac{1}{2} r^2 \dot{\theta} = \frac{\pi a b}{T}
+    = \frac{1}{2}\sqrt{K_s a(1-e^2)} = \frac{1}{2}\sqrt{K_s p}
+\end{equation}
+
+其中 $b = a\sqrt{1-e^2}$ 为椭圆的半短轴\cite[\S6.2, 式(6.3)]{qian2008}，$T$ 为轨道周期。
+
+\subsection{轨道周期（开普勒第三定律）}
+
+由\cite[\S5.4, 式(5.15); \S6.2, 式(6.4)]{qian2008}：
+\begin{equation}\label{eq:period}
+    T = 2\pi\sqrt{\frac{a^3}{K_s}}
+\end{equation}
+
+\subsection{开普勒方程}
+
+由\cite[\S5.4, pp.~111]{qian2008}，平近点角 $M$ 与偏近点角 $E$ 的关系：
+\begin{equation}\label{eq:kepler}
+    M = E - e\sin E = \frac{2\pi}{T}(t - t_p)
+\end{equation}
+其中 $t_p$ 为过近日点时刻。偏近点角 $E$ 与真近点角 $\theta$ 的关系为：
+\begin{equation}\label{eq:EtoTheta}
+    \tan\frac{\theta}{2} = \sqrt{\frac{1+e}{1-e}}\;\tan\frac{E}{2}
+\end{equation}
+
+\section{火箭轨道求解步骤}
+
+\subsection{步骤一：已知参数}
+
+地球轨道半径和公转速度\cite[\S6.3, pp.~122]{qian2008}：
+\begin{equation}\label{eq:ve}
+    r_1 = 1.4957 \times 10^8\;\text{km}, \quad
+    v_e = \sqrt{\frac{K_s}{r_1}} = 29.80\;\text{km/s}
+\end{equation}
+
+地球表面第二宇宙速度\cite[\S1.5, pp.~15]{qian2008}：
+\begin{equation}
+    v_2 = 11.18\;\text{km/s}
+\end{equation}
+
+\subsection{步骤二：选定近日距 $r_p$}
+
+近日距 $r_p$ 是核心设计参数，必须满足：
+\begin{equation}
+    R_s = 6.96 \times 10^5\;\text{km} < r_p < r_1
+\end{equation}
+
+$r_p$ 越小，轨道越扁（$e$ 越大），绕过太阳越"紧贴"，但防热要求越高。
+本文取 $r_p = 0.2$\,AU 作为设计算例。
+
+\subsection{步骤三：计算轨道参数}
+
+将 $r_a = r_1$、$r_p$ 代入式(\ref{eq:a})--(\ref{eq:p})：
+\begin{align}
+    a    &= \frac{r_1 + r_p}{2} \label{eq:step_a} \\
+    e    &= \frac{r_1 - r_p}{r_1 + r_p} \label{eq:step_e} \\
+    p    &= \frac{2r_1 r_p}{r_1 + r_p} \label{eq:step_p}
+\end{align}
+
+\subsection{步骤四：求出发日心速度和速度增量}
+
+在出发/返回点 $r = r_1$（远日点），由活力公式(\ref{eq:visviva})：
+\begin{equation}\label{eq:v1}
+    v_1 = v_a = \sqrt{K_s\left(\frac{2}{r_1} - \frac{1}{a}\right)}
+        = \sqrt{\frac{K_s}{r_1}\cdot\frac{2r_p}{r_1+r_p}}
+        = v_e\sqrt{\frac{2r_p}{r_1+r_p}}
+\end{equation}
+
+由\cite[\S6.2, 式(6.8)]{qian2008}的思路，火箭脱离地球引力场后，进入日心椭圆轨道所需的\textbf{日心速度增量}为：
+\begin{equation}\label{eq:deltaV}
+    \Delta v = v_1 - v_e = v_e\left(\sqrt{\frac{2r_p}{r_1 + r_p}} - 1\right)
+\end{equation}
+
+因为 $r_p < r_1$，故 $\Delta v < 0$，表明火箭需向\textbf{地球公转的反方向}发射以减速，
+这与\cite[\S6.2, pp.~121]{qian2008}中"向内圈行星发射需减速"的结论一致。
+
+\subsection{步骤五：求地面发射速度}
+
+按\cite[\S6.3, 第一方案, pp.~122]{qian2008}，从地球表面直接起飞所需的速度为：
+\begin{equation}\label{eq:v_launch}
+    v_{\text{发射}} = \sqrt{v_2^2 + |\Delta v|^2}
+\end{equation}
+
+展开为：
+\begin{equation}
+    v_{\text{发射}} = \sqrt{v_2^2 + v_e^2\left(1 - \sqrt{\frac{2r_p}{r_1 + r_p}}\right)^2}
+\end{equation}
+
+\subsection{步骤六：求飞行时间}
+
+轨道周期由式(\ref{eq:period})给出。将 $a$ 表达为地球轨道参数：
+\begin{equation}\label{eq:T}
+    T = 2\pi\sqrt{\frac{a^3}{K_s}} = T_e\left(\frac{a}{r_1}\right)^{3/2}
+      = T_e\left(\frac{r_1 + r_p}{2r_1}\right)^{3/2}
+\end{equation}
+其中 $T_e = 365.25$ 天为地球公转周期。
+
+在出发点 $P_1$（远日点），真近点角 $\theta_1 = \pi$。
+由式(\ref{eq:EtoTheta})得 $E_1 = \pi$。由开普勒方程(\ref{eq:kepler})：
+\begin{equation}
+    M_1 = \pi - e\sin\pi = \pi
+\end{equation}
+
+从 $P_1$ 到近日点 $P_p$ 的时间：
+\begin{equation}
+    t_{1\to p} = \frac{T}{2\pi} \cdot \pi = \frac{T}{2}
+\end{equation}
+
+从 $P_1$ 经 $P_p$ 至 $P_2$ 的总飞行时间：
+\begin{equation}\label{eq:dt}
+    \Delta t = 2 \cdot t_{1\to p} = T
+\end{equation}
+
+即火箭恰好飞行\textbf{一个完整轨道周期}后返回出发点同一位置。但此时地球已经运动到了新位置，因此需要调整（见步骤七）。
+
+\textbf{修正}：若出发点 $P_1$ 不是远日点，则 $\theta_1 \neq \pi$。由式(\ref{eq:conic})：
+\begin{equation}
+    \cos\theta_1 = \frac{p - r_1}{e r_1}
+\end{equation}
+
+由式(\ref{eq:EtoTheta})求 $E_1$，再由式(\ref{eq:kepler})求 $M_1$，最后得：
+\begin{equation}
+    \Delta t = \frac{T}{\pi} \cdot M_1
+\end{equation}
+
+\subsection{步骤七：相位匹配条件}
+
+在时间 $\Delta t$ 内，地球沿其轨道运动的角度为：
+\begin{equation}
+    \Delta\phi_{\text{地球}} = \frac{2\pi}{T_e} \cdot \Delta t
+\end{equation}
+
+火箭在日心轨道上扫过的真近点角为 $\Delta\theta_{\text{火箭}} = 2\pi - 2\theta_1$（或 $2\pi$，若 $P_1$、$P_2$ 均为远日点同一点）。
+
+\textbf{交会条件}：火箭返回 $r = r_1$ 时，地球必须恰好位于该点，即：
+\begin{equation}\label{eq:phasing}
+    \Delta\phi_{\text{地球}} = \Delta\theta_{\text{火箭}} + 2k\pi, \quad k = 0,1,2,\ldots
+\end{equation}
+
+这确定了\textbf{发射窗口}——只有在特定时刻出发，返回时地球才能到达预定位置。
+
+\subsection{步骤八：返回地球——再入速度}
+
+火箭返回时相对地球的速度由日心速度 $v_1$ 和地球公转速度 $v_e$ 的矢量差给出。
+对于共面同向返回的情况，返回的双曲线超速近似为：
+\begin{equation}
+    v_{\infty,\text{返回}} \approx |v_1 - v_e| = |\Delta v|
+\end{equation}
+
+此即\cite[\S10.2, pp.~849]{qian2008}中再入大气层轨道分析的初始条件。
+再入速度约为 $v_{\text{再入}} \approx \sqrt{v_2^2 + v_{\infty,\text{返回}}^2}$。
+
+\section{数值算例}
+
+取 $r_p = 0.2$\,AU $= 2.99 \times 10^7$\,km，计算结果见表\ref{tab:results}。
+
+\begin{table}[htbp]
+\centering
+\caption{数值计算结果（$r_p = 0.2$\,AU）}
+\label{tab:results}
+\begin{tabular}{lcl}
+    \toprule
+    参数 & 符号 & 数值 \\
+    \midrule
+    近日距             & $r_p$   & $0.2$\,AU \\
+    半长轴             & $a$     & $0.6$\,AU \\
+    偏心率             & $e$     & $0.6667$ \\
+    半通径             & $p$     & $0.333$\,AU \\
+    日心速度（出发/返回） & $v_1$ & $17.21$\,km/s \\
+    日心速度增量       & $\Delta v$ & $-12.59$\,km/s \\
+    地面发射速度       & $v_{\text{发射}}$ & $16.84$\,km/s \\
+    轨道周期           & $T$     & $169.8$\,天 \\
+    飞行时间（半周期） & $\Delta t$ & $84.9$\,天 \\
+    \bottomrule
+\end{tabular}
+\end{table}
+
+从表\ref{tab:results}可见，所需的发射速度约 $16.84$\,km/s，
+已超过第三宇宙速度（$16.63$\,km/s \cite[\S1.5, pp.~18]{qian2008}），
+但仍在钱先生书中所讨论的化学/核热推进可达到的范围之内\cite[第7章]{qian2008}。
+
+\section{结论与讨论}
+
+本文严格遵循钱学森《星际航行概论》的框架，求解了火箭绕过太阳返回地球的轨道问题。
+核心步骤包括：
+\begin{enumerate}[label=(\arabic*)]
+    \item 利用活力公式(\ref{eq:visviva})和椭圆极坐标方程(\ref{eq:conic})确定日心过渡轨道；
+    \item 由日心速度增量 $\Delta v$ 结合第二宇宙速度求地面发射速度；
+    \item 由开普勒方程(\ref{eq:kepler})计算飞行时间；
+    \item 由相位匹配条件(\ref{eq:phasing})确定发射窗口。
+\end{enumerate}
+
+钱书中反复强调的核心思想——\textbf{利用引力场进行自由飞行以节省能量}——在此得到充分体现：
+火箭仅在出发和返回时消耗推进剂，中间漫长的日心飞行段完全不消耗燃料，
+整个轨道由太阳引力自然弯曲，实现对太阳的绕飞返回。
+
+\printbibliography[title={参考文献}]
+
+\end{document}

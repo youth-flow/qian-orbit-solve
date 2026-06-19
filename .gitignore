@@ -1,0 +1,43 @@
+﻿# Local secrets
+JPL_API.env
+**/JPL_API.env
+
+# Large copyrighted reference books kept outside the public repo
+星际航行概论-钱学森-2008年版.pdf
+行星航行概论-钱学森-1963年版.pdf
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Generated outputs and heavy reproducible artifacts
+FinalProject/data/generated/
+data/generated/
+FinalProject/report.pdf
+FinalProject/*.aux
+FinalProject/*.bbl
+FinalProject/*.blg
+FinalProject/*.fdb_latexmk
+FinalProject/*.fls
+FinalProject/*.log
+FinalProject/*.out
+FinalProject/*.toc
+FinalProject/*.xdv
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.toc
+*.xdv
+*.synctex.gz
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
